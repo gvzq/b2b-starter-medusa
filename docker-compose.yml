@@ -11,6 +11,11 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - medusa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: redis:latest
@@ -20,6 +25,64 @@ services:
       - redis-data:/data
     networks:
       - medusa-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    environment:
+      - DATABASE_URL=postgres://postgres:medusa@postgres:5432/medusa?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=something
+      - COOKIE_SECRET=something
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=medusa
+      - POSTGRES_DB=medusa
+      - DB_NAME=medusa
+      - DATABASE_TYPE=postgres
+      - STORE_CORS=/http://.+/
+      - ADMIN_CORS=/http://.+/
+      - AUTH_CORS=/http://.+/
+      - NODE_ENV=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - medusa-network
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+  # storefront:
+  #   build:
+  #     context: ./storefront
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000
+  #       - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_d4031f0251892df1ed6e5bc79254fefbce11ca80ebbb77270d0e3abd46c49087
+  #       - NEXT_PUBLIC_BASE_URL=http://localhost:8000
+  #       - NEXT_PUBLIC_DEFAULT_REGION=us
+  #       - REVALIDATE_SECRET=supersecret
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://backend:9000
+  #     - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_d4031f0251892df1ed6e5bc79254fefbce11ca80ebbb77270d0e3abd46c49087
+  #     - NEXT_PUBLIC_BASE_URL=http://localhost:8000
+  #     - NEXT_PUBLIC_DEFAULT_REGION=us
+  #     - REVALIDATE_SECRET=supersecret
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - medusa-network
 
 volumes:
   postgres-data:
